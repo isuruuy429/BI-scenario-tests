@@ -4,7 +4,10 @@ import ballerina/log;
 import wso2/ftp;
 import ballerina/io;
 
-const string remoteLocation = "/home/ftp-user/in/account.json";
+const string remoteLocationJson = "/home/ftp-user/in/account.json";
+const string remoteLocationXML = "/home/ftp-user/in/client.xml";
+const string remoteLocationText = "/home/ftp-user/in/student.txt";
+
 
 ftp:ClientEndpointConfig ftpConfig = {
     protocol: ftp:FTP,
@@ -33,7 +36,45 @@ service company on new http:Listener(9090) {
     resource function addJsonFile(http:Caller caller, http:Request request) returns error? {
         http:Response response = new ();
         json jsonPayload = check request.getJsonPayload();
-        var ftpResult = ftp->put(remoteLocation, jsonPayload);
+        var ftpResult = ftp->put(remoteLocationJson, jsonPayload);
+
+        if (ftpResult is error) {
+            log:printError("Error", ftpResult);
+            response.setJsonPayload({Message: "Error occurred uploading file to FTP.", Resason: ftpResult.reason()});
+        } else {
+            response.setJsonPayload({Message: "Employee records uploaded successfully."});
+        }
+        var httpResult = caller->respond(response);
+    }
+
+    @http:ResourceConfig {
+        methods: ["POST"],
+        path: "/addTextFile"
+    }
+
+    resource function addTextFile(http:Caller caller, http:Request request) returns error? {
+        http:Response response = new ();
+        json textPayload = check request.getTextPayload();
+        var ftpResult = ftp->put(remoteLocationText, textPayload);
+
+        if (ftpResult is error) {
+            log:printError("Error", ftpResult);
+            response.setJsonPayload({Message: "Error occurred uploading file to FTP.", Resason: ftpResult.reason()});
+        } else {
+            response.setJsonPayload({Message: "Employee records uploaded successfully."});
+        }
+        var httpResult = caller->respond(response);
+    }
+
+        @http:ResourceConfig {
+        methods: ["POST"],
+        path: "/addXMLFile"
+    }
+
+    resource function addXMLFile(http:Caller caller, http:Request request) returns error? {
+        http:Response response = new ();
+        xml xmlPayload = check request.getXmlPayload();
+        var ftpResult = ftp->put(remoteLocationXML, xmlPayload);
 
         if (ftpResult is error) {
             log:printError("Error", ftpResult);
@@ -86,7 +127,7 @@ service company on new http:Listener(9090) {
         var ftpResult = ftp->delete("/home/ftp-user/in/" +fileName);
 
         if (ftpResult is error) {
-            response.setJsonPayload({Message: "Error occurred deleting file.", Resason: ftpResult.reason()});
+            response.setJsonPayload({Message: "Error occurred while deleting the file.", Reason: ftpResult.reason()});
             log:printError("Error occurred while deleting a file", ftpResult);
         }
         else {
@@ -140,12 +181,12 @@ service company on new http:Listener(9090) {
     }
 
      @http:ResourceConfig {
-        path: "/renameFile/{fileName}"
+        path: "/renameFile/{existingFileName}/{newFileName}"
     }
 
-    resource function renameFile(http:Caller caller, http:Request request, string fileName) returns error? {
+    resource function renameFile(http:Caller caller, http:Request request, string existingFileName, string newFileName) returns error? {
         http:Response response = new ();
-        var ftpResult = ftp->rename(remoteLocation, "/home/ftp-user/in/"+fileName);
+        var ftpResult = ftp->rename("/home/ftp-user/in/"+existingFileName, "/home/ftp-user/in/"+newFileName);
 
         if (ftpResult is error) {
             response.setJsonPayload({Message: "Error occurred renaming the file.", Reason: ftpResult.reason()});
@@ -159,17 +200,57 @@ service company on new http:Listener(9090) {
     }
 
      @http:ResourceConfig {
-        path: "/retreiveFileSize"
+        path: "/retreiveFileSize/{fileName}"
     }
 
-    resource function retreiveFileSize(http:Caller caller, http:Request request) returns error? {
+    resource function retreiveFileSize(http:Caller caller, http:Request request, string fileName) returns error? {
         http:Response response = new ();
-        var ftpResponse = ftp->size("/home/ftp-user/student.txt");
+        var ftpResponse = ftp->size("/home/ftp-user/in/"+ fileName);
         if (ftpResponse is int) {
-            response.setJsonPayload("File size: " + ftpResponse.toString());
+            response.setJsonPayload({FileSize: ftpResponse});
         } else {
             response.setJsonPayload({Message: "Error occured in retrieving size", Reason: ftpResponse.reason()});
             log:printError("Error occured in retrieving size", ftpResponse);
+        }
+        var httpResult = caller->respond(response);
+    }
+
+    @http:ResourceConfig {
+        path: "/listFiles"
+    }
+
+    resource function listFiles(http:Caller caller, http:Request request)returns error?{
+        http:Response response = new ();
+        var ftpResult = ftp->list("/home/ftp-user/in");
+
+        if (ftpResult is error) {
+            response.setJsonPayload({Message: "Error occurred while listing the files", Reason: ftpResult.reason()});
+            log:printError("Error occurred while listing the files", ftpResult);
+        }
+        else
+        {
+
+            response.setJsonPayload({Files: ftpResult.toString()});
+        }
+        var httpResult = caller->respond(response);
+
+    }
+
+    @http:ResourceConfig {
+        methods: ["POST"],
+        path: "/addFiles/{customizedLocation}"
+    }
+
+    resource function addFiles(http:Caller caller, http:Request request, string customizedLocation) returns error? {
+        http:Response response = new ();
+        string textPayload = check request.getTextPayload();
+        var ftpResult = ftp->put(customizedLocation, textPayload);
+
+        if (ftpResult is error) {
+            log:printError("Error", ftpResult);
+            response.setJsonPayload({Message: "Error occurred uploading file to FTP.", Resason: ftpResult.reason()});
+        } else {
+            response.setJsonPayload({Message: "File uploaded successfully."});
         }
         var httpResult = caller->respond(response);
     }
